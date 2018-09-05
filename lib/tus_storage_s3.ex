@@ -66,6 +66,12 @@ defmodule Tus.Storage.S3 do
     |> Path.join()
   end
 
+  def url(uid, config) do
+    [host_url(config), file_path(uid, config)]
+    |> Path.join()
+    |> URI.encode()
+  end
+
   @doc """
   Get base_path.
   """
@@ -89,6 +95,22 @@ defmodule Tus.Storage.S3 do
 
   defp host(config) do
     config |> Map.get(:s3_host, @default_host)
+  end
+
+  defp host_url(config) do
+    Map.get(config, :s3_host, default_host(config))
+    |> case do
+      {:system, env_var} when is_binary(env_var) -> System.get_env(env_var)
+      url -> url
+    end
+  end
+
+  defp default_host(%{s3_bucket: s3_bucket} = config) do
+    Map.get(config, :s3_virtual_host, false)
+    |> case do
+      true -> "https://#{s3_bucket}.s3.amazonaws.com"
+      _ -> "https://s3.amazonaws.com/#{s3_bucket}"
+    end
   end
 
   defp min_part_size(config) do
