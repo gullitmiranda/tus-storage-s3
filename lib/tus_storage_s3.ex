@@ -4,7 +4,7 @@ defmodule Tus.Storage.S3 do
 
   ## Installation
 
-  The package can be installed by adding `tus_cache_redis` to your list of dependencies in `mix.exs`:
+  The package can be installed by adding `tus_storage_s3` to your list of dependencies in `mix.exs`:
 
   ```elixir
   def deps do
@@ -21,6 +21,7 @@ defmodule Tus.Storage.S3 do
   - `s3_bucket`: The name of your bucket
 
   - `s3_host`: Optional. "s3.amazonaws.com" by default
+  - `s3_virtual_host`: Optional. false by default
   - `s3_prefix`: Optional. Prefix added to all files. Empty by default
   - `s3_min_part_size`: The minimum size of a single part (except the last).
     In Amazon S3 this is 5MB. For other, compatible services, you might want/need to
@@ -57,18 +58,34 @@ defmodule Tus.Storage.S3 do
   @default_host "s3.amazonaws.com"
   @default_min_part_size 5 * 1024 * 1024
 
-  defp file_path(config, file) do
-    Enum.join(
-      [
-        config
-        |> Map.get(:s3_prefix, "")
-        |> String.trim("/"),
-        file.uid
-      ],
-      "/"
-    )
+  @doc """
+  Get uid file path.
+  """
+  def file_path(uid, config) do
+    [base_path(config), slice_path(uid, config)]
+    |> Path.join()
+  end
+
+  @doc """
+  Get base_path.
+  """
+  def base_path(config) do
+    config
+    |> Map.get(:s3_prefix, "")
     |> String.trim("/")
   end
+
+  def slice_path(uid, %{slice_path: true} = _config) do
+    uid
+    |> String.split("")
+    |> Enum.slice(1, 3)
+    |> Enum.concat([uid])
+    |> Path.join()
+  end
+
+  def slice_path(uid, _config), do: uid
+
+  # Storage methods
 
   defp host(config) do
     config |> Map.get(:s3_host, @default_host)
@@ -97,7 +114,7 @@ defmodule Tus.Storage.S3 do
   """
   def create(file, config) do
     host = host(config)
-    file_path = file_path(config, file)
+    file_path = file_path(file.uid, config)
 
     %{bucket: config.s3_bucket, path: file_path, opts: [], upload_id: nil}
     |> S3.Upload.initialize(host: host)
@@ -160,7 +177,7 @@ defmodule Tus.Storage.S3 do
   """
   def delete(file, config) do
     ""
-    |> ExAws.S3.delete_object(file_path(config, file))
+    |> ExAws.S3.delete_object(file_path(file.uid, config))
     |> ExAws.request(host: host(config))
   end
 end
